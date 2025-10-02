@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
@@ -6,10 +6,60 @@ import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
 import TeamsPage from './pages/TeamsPage';
 import ProfilePage from './pages/ProfilePage';
-import { useStore } from './store/useStore';
+import LoadingSpinner from './components/LoadingSpinner';
+import ErrorMessage from './components/ErrorMessage';
+
+// Choose your store implementation:
+// For Google Sheets backend (recommended for production):
+import { useGoogleSheetsStore as useStore } from './store/googleSheetsStore';
+// For mock data (demo only):
+// import { useStore } from './store/useStore';
 
 function App() {
-  const currentUser = useStore((state) => state.currentUser);
+  const {
+    currentUser,
+    loading,
+    error,
+    fetchUsers,
+    fetchTeams,
+    setError
+  } = useStore();
+
+  // Load initial data on app start
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([
+          fetchUsers(),
+          fetchTeams()
+        ]);
+      } catch (err) {
+        console.error('Failed to load initial data:', err);
+      }
+    };
+
+    loadInitialData();
+  }, [fetchUsers, fetchTeams]);
+
+  // Show loading screen during initial data fetch
+  if (loading && !currentUser) {
+    return <LoadingSpinner fullScreen text="Loading Airbnb Hackathon 2024..." />;
+  }
+
+  // Show error screen if initial load fails
+  if (error && !currentUser) {
+    return (
+      <ErrorMessage
+        fullScreen
+        message={`Failed to connect to the backend: ${error}`}
+        onRetry={() => {
+          setError(null);
+          fetchUsers();
+          fetchTeams();
+        }}
+      />
+    );
+  }
 
   return (
     <Router>
