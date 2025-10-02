@@ -11,55 +11,12 @@ import ErrorMessage from './components/ErrorMessage';
 
 // Choose your store implementation:
 // For Google Sheets backend (recommended for production):
-import { useGoogleSheetsStore as useStore } from './store/googleSheetsStore';
+// import { useGoogleSheetsStore as useStore } from './store/googleSheetsStore';
 // For mock data (demo only):
-// import { useStore } from './store/useStore';
+import { useStore } from './store/useStore';
 
 function App() {
-  const {
-    currentUser,
-    loading,
-    error,
-    fetchUsers,
-    fetchTeams,
-    setError
-  } = useStore();
-
-  // Load initial data on app start
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        await Promise.all([
-          fetchUsers(),
-          fetchTeams()
-        ]);
-      } catch (err) {
-        console.error('Failed to load initial data:', err);
-      }
-    };
-
-    loadInitialData();
-  }, [fetchUsers, fetchTeams]);
-
-  // Show loading screen during initial data fetch
-  if (loading && !currentUser) {
-    return <LoadingSpinner fullScreen text="Loading Airbnb Hackathon 2024..." />;
-  }
-
-  // Show error screen if initial load fails
-  if (error && !currentUser) {
-    return (
-      <ErrorMessage
-        fullScreen
-        message={`Failed to connect to the backend: ${error}`}
-        onRetry={() => {
-          setError(null);
-          fetchUsers();
-          fetchTeams();
-        }}
-      />
-    );
-  }
+  const currentUser = useStore((state) => state.currentUser);
 
   return (
     <Router>
