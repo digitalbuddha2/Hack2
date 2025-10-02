@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900 font-sans;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-airbnb-red text-white px-6 py-3 rounded-lg font-medium hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-airbnb-red focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-airbnb-red border border-airbnb-red px-6 py-3 rounded-lg font-medium hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-airbnb-red focus:ring-offset-2;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-shadow;
+  }
+
+  .input {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-airbnb-red focus:border-transparent;
+  }
+
+  .gradient-bg {
+    @apply bg-gradient-to-br from-airbnb-red via-pink-500 to-orange-400;
+  }
+
+  .glass {
+    @apply backdrop-blur-md bg-white bg-opacity-80 border border-white border-opacity-20;
+  }
+}
