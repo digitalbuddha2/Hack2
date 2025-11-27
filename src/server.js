@@ -289,8 +289,9 @@ app.get('*', (req, res) => {
 // ============ START SERVER ============
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`ClaudeMail server running on port ${PORT}`);
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`ClaudeMail server running on ${HOST}:${PORT}`);
   console.log(`Powered by Claude Agent SDK`);
   console.log(`Dashboard: http://localhost:${PORT}`);
 });
