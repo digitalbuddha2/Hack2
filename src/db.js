@@ -1,11 +1,15 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+import Database from 'better-sqlite3';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../data/claudemail.db');
 
 // Ensure data directory exists
-const fs = require('fs');
 const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -33,13 +37,26 @@ db.exec(`
     user_id TEXT NOT NULL,
     user_message TEXT NOT NULL,
     assistant_response TEXT NOT NULL,
+    thread_id TEXT,
     created_at INTEGER DEFAULT (unixepoch()),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    thread_id TEXT UNIQUE NOT NULL,
+    context TEXT,
+    created_at INTEGER DEFAULT (unixepoch()),
+    updated_at INTEGER DEFAULT (unixepoch()),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id);
   CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
+  CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(thread_id);
+  CREATE INDEX IF NOT EXISTS idx_agent_sessions_thread ON agent_sessions(thread_id);
 `);
 
 // User operations
@@ -99,13 +116,13 @@ function updateSubscriptionStatus(customerId, status, endDate) {
 }
 
 // Conversation operations
-function logConversation(userId, userMessage, assistantResponse) {
+function logConversation(userId, userMessage, assistantResponse, threadId = null) {
   const id = uuidv4();
   const stmt = db.prepare(`
-    INSERT INTO conversations (id, user_id, user_message, assistant_response)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO conversations (id, user_id, user_message, assistant_response, thread_id)
+    VALUES (?, ?, ?, ?, ?)
   `);
-  stmt.run(id, userId, userMessage, assistantResponse);
+  stmt.run(id, userId, userMessage, assistantResponse, threadId);
   return id;
 }
 
@@ -119,7 +136,44 @@ function getConversations(userId, limit = 50) {
   return stmt.all(userId, limit);
 }
 
-module.exports = {
+function getConversationsByThread(threadId) {
+  const stmt = db.prepare(`
+    SELECT * FROM conversations
+    WHERE thread_id = ?
+    ORDER BY created_at ASC
+  `);
+  return stmt.all(threadId);
+}
+
+// Agent session operations
+function createAgentSession(userId, threadId, context = null) {
+  const id = uuidv4();
+  const stmt = db.prepare(`
+    INSERT INTO agent_sessions (id, user_id, thread_id, context)
+    VALUES (?, ?, ?, ?)
+  `);
+  stmt.run(id, userId, threadId, context ? JSON.stringify(context) : null);
+  return { id, userId, threadId };
+}
+
+function getAgentSession(threadId) {
+  const stmt = db.prepare('SELECT * FROM agent_sessions WHERE thread_id = ?');
+  const session = stmt.get(threadId);
+  if (session && session.context) {
+    session.context = JSON.parse(session.context);
+  }
+  return session;
+}
+
+function updateAgentSession(threadId, context) {
+  const stmt = db.prepare(`
+    UPDATE agent_sessions SET context = ?, updated_at = unixepoch()
+    WHERE thread_id = ?
+  `);
+  stmt.run(JSON.stringify(context), threadId);
+}
+
+export {
   createUser,
   getUserByEmail,
   getUserById,
@@ -128,5 +182,9 @@ module.exports = {
   updateUserStripeInfo,
   updateSubscriptionStatus,
   logConversation,
-  getConversations
+  getConversations,
+  getConversationsByThread,
+  createAgentSession,
+  getAgentSession,
+  updateAgentSession
 };

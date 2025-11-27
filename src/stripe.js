@@ -1,5 +1,5 @@
-const Stripe = require('stripe');
-const db = require('./db');
+import Stripe from 'stripe';
+import * as db from './db.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -98,7 +98,7 @@ async function cancelSubscription(subscriptionId) {
   await stripe.subscriptions.cancel(subscriptionId);
 }
 
-module.exports = {
+export {
   createCheckoutSession,
   handleWebhook,
   cancelSubscription

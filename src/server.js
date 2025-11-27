@@ -1,14 +1,19 @@
-require('dotenv').config();
-const express = require('express');
-const cookieParser = require('cookie-parser');
-const multer = require('multer');
-const path = require('path');
+import 'dotenv/config';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
 
-const db = require('./db');
-const auth = require('./auth');
-const stripe = require('./stripe');
-const email = require('./email');
-const claude = require('./claude');
+import * as db from './db.js';
+import * as auth from './auth.js';
+import * as stripeModule from './stripe.js';
+import * as emailModule from './email.js';
+import { chat, chatWithHistory } from './claude.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const upload = multer();
@@ -106,7 +111,7 @@ app.post('/api/settings/api-key', auth.requireAuth, (req, res) => {
 app.post('/api/subscribe', auth.requireAuth, async (req, res) => {
   try {
     const user = db.getUserById(req.userId);
-    const session = await stripe.createCheckoutSession(user);
+    const session = await stripeModule.createCheckoutSession(user);
     res.json({ url: session.url });
   } catch (error) {
     console.error('Subscription error:', error);
@@ -117,7 +122,7 @@ app.post('/api/subscribe', auth.requireAuth, async (req, res) => {
 // Stripe webhook
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
-    await stripe.handleWebhook(req.body, req.headers['stripe-signature']);
+    await stripeModule.handleWebhook(req.body, req.headers['stripe-signature']);
     res.json({ received: true });
   } catch (error) {
     console.error('Stripe webhook error:', error);
@@ -130,7 +135,7 @@ app.post('/api/cancel-subscription', auth.requireAuth, async (req, res) => {
   try {
     const user = db.getUserById(req.userId);
     if (user.stripe_subscription_id) {
-      await stripe.cancelSubscription(user.stripe_subscription_id);
+      await stripeModule.cancelSubscription(user.stripe_subscription_id);
     }
     res.json({ success: true });
   } catch (error) {
@@ -152,7 +157,7 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
     console.log('Subject:', subject);
 
     // Extract email address from "Name <email@example.com>" format
-    const fromEmail = email.extractEmail(from);
+    const fromEmail = emailModule.extractEmail(from);
 
     if (!fromEmail) {
       console.log('Could not extract sender email');
@@ -164,7 +169,7 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
 
     if (!user) {
       // Send "not registered" response
-      await email.sendEmail(
+      await emailModule.sendEmail(
         fromEmail,
         'Re: ' + (subject || 'Your message'),
         `Hi!\n\nYou're not registered with ClaudeMail yet.\n\nSign up at ${process.env.BASE_URL} to start chatting with Claude via email!\n\n- ClaudeMail`
@@ -174,7 +179,7 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
 
     // Check if user has access (subscription or API key)
     if (!user.anthropic_api_key && user.subscription_status !== 'active') {
-      await email.sendEmail(
+      await emailModule.sendEmail(
         fromEmail,
         'Re: ' + (subject || 'Your message'),
         `Hi!\n\nYou need an active subscription or your own API key to use ClaudeMail.\n\nManage your account at ${process.env.BASE_URL}\n\n- ClaudeMail`
@@ -186,7 +191,7 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
     const messageContent = text || html || subject || '';
 
     if (!messageContent.trim()) {
-      await email.sendEmail(
+      await emailModule.sendEmail(
         fromEmail,
         'Re: ' + (subject || 'Your message'),
         `Hi!\n\nYour email appears to be empty. Please send a message with your question.\n\n- ClaudeMail`
@@ -197,21 +202,54 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
     // Use user's API key or fall back to system key
     const apiKey = user.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
 
-    // Call Claude API
-    console.log('Calling Claude API for user:', user.email);
-    const response = await claude.chat(messageContent, apiKey);
+    // Check for existing thread (conversation continuity)
+    let threadId = emailModule.extractThreadId(subject);
+    let response;
 
-    // Log the conversation
-    db.logConversation(user.id, messageContent, response);
+    if (threadId) {
+      // Existing thread - get conversation history
+      const existingSession = db.getAgentSession(threadId);
+
+      if (existingSession && existingSession.user_id === user.id) {
+        // Continue existing conversation with history
+        const previousMessages = db.getConversationsByThread(threadId);
+        const messages = previousMessages.flatMap(c => [
+          { role: 'user', content: c.user_message },
+          { role: 'assistant', content: c.assistant_response }
+        ]);
+        messages.push({ role: 'user', content: messageContent });
+
+        console.log('Continuing thread:', threadId, 'with', previousMessages.length, 'previous messages');
+        response = await chatWithHistory(messages, apiKey);
+      } else {
+        // Thread ID not found or doesn't belong to user, start new thread
+        threadId = uuidv4();
+        db.createAgentSession(user.id, threadId);
+        console.log('Starting new thread (invalid existing):', threadId);
+        response = await chat(messageContent, apiKey);
+      }
+    } else {
+      // New conversation - create new thread
+      threadId = uuidv4();
+      db.createAgentSession(user.id, threadId);
+      console.log('Starting new thread:', threadId);
+      response = await chat(messageContent, apiKey);
+    }
+
+    // Log the conversation with thread ID
+    db.logConversation(user.id, messageContent, response, threadId);
+
+    // Format subject with thread ID for reply tracking
+    const responseSubject = emailModule.formatSubject(subject, threadId);
 
     // Send response email
-    await email.sendEmail(
+    await emailModule.sendEmail(
       fromEmail,
-      'Re: ' + (subject || 'Your message'),
-      response + '\n\n---\nSent via ClaudeMail | Manage account: ' + process.env.BASE_URL
+      responseSubject,
+      response + '\n\n---\nSent via ClaudeMail (powered by Claude Agent SDK)\nThread: ' + threadId + '\nManage account: ' + process.env.BASE_URL
     );
 
-    console.log('Response sent to:', fromEmail);
+    console.log('Response sent to:', fromEmail, 'thread:', threadId);
     res.status(200).send('OK');
   } catch (error) {
     console.error('Email webhook error:', error);
@@ -234,7 +272,12 @@ app.get('/api/conversations', auth.requireAuth, (req, res) => {
 // ============ HEALTH CHECK ============
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    version: '2.0.0',
+    sdk: 'claude-agent-sdk'
+  });
 });
 
 // ============ SPA FALLBACK ============
@@ -248,5 +291,6 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`ClaudeMail server running on port ${PORT}`);
+  console.log(`Powered by Claude Agent SDK`);
   console.log(`Dashboard: http://localhost:${PORT}`);
 });

@@ -1,4 +1,4 @@
-const sgMail = require('@sendgrid/mail');
+import sgMail from '@sendgrid/mail';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -29,6 +29,20 @@ function extractEmail(from) {
   return null;
 }
 
+// Extract thread ID from email subject (Re: [thread-id] Subject)
+function extractThreadId(subject) {
+  if (!subject) return null;
+  const match = subject.match(/\[([a-f0-9-]+)\]/i);
+  return match ? match[1] : null;
+}
+
+// Format subject with thread ID
+function formatSubject(originalSubject, threadId) {
+  // Remove existing thread ID if present
+  const cleanSubject = originalSubject?.replace(/\s*\[[a-f0-9-]+\]\s*/gi, '').trim() || 'Your message';
+  return `Re: [${threadId}] ${cleanSubject}`;
+}
+
 async function sendEmail(to, subject, text) {
   const msg = {
     to,
@@ -49,7 +63,9 @@ async function sendEmail(to, subject, text) {
   }
 }
 
-module.exports = {
+export {
   extractEmail,
+  extractThreadId,
+  formatSubject,
   sendEmail
 };

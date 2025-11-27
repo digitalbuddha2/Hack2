@@ -1,6 +1,6 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const db = require('./db');
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import * as db from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-production';
 
@@ -49,7 +49,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = {
+export {
   createUser,
   verifyUser,
   generateToken,

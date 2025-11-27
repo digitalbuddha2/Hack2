@@ -1,6 +1,14 @@
 # ClaudeMail - AI Over Email
 
-Talk to Claude AI via email. Like Claude Code, but over email.
+Talk to Claude AI via email. Powered by the **Claude Agent SDK** - like Claude Code, but over email.
+
+## Features
+
+- **Agentic AI**: Uses Claude Agent SDK for intelligent, multi-step reasoning
+- **Web Search**: Agent can search the web for current information
+- **Conversation Threading**: Maintains context across email replies
+- **BYOK or Subscribe**: Use your own API key or subscribe for $20/mo
+- **Conversation History**: View all past conversations in dashboard
 
 ## Quick Start (Test Locally)
 
@@ -108,8 +116,30 @@ docker run -p 3000:3000 --env-file .env claudemail
    - Adds their own Anthropic API key
 3. User sends email to `ask@yourdomain.com`
 4. System identifies user by sender email
-5. System calls Claude API
-6. Response sent back via email
+5. **Claude Agent SDK processes the request** with:
+   - Multi-step reasoning
+   - Web search capability
+   - Conversation context
+6. Response sent back via email with thread ID
+7. Replies maintain conversation context
+
+## Conversation Threading
+
+ClaudeMail maintains conversation context across email replies:
+
+- Each new conversation gets a unique thread ID
+- Thread ID is included in email subject: `Re: [abc123] Your question`
+- Replying to an email continues the same conversation
+- Agent remembers previous context for follow-up questions
+
+## Claude Agent SDK Features
+
+This project uses the Claude Agent SDK (`@anthropic-ai/claude-code`) which provides:
+
+- **Agentic Processing**: Multi-turn reasoning with up to 10 steps
+- **Tool Access**: Web search and web fetch capabilities
+- **Streaming**: Real-time response generation
+- **Error Handling**: Graceful fallbacks for API issues
 
 ## API Endpoints
 
@@ -125,15 +155,30 @@ docker run -p 3000:3000 --env-file .env claudemail
 | `/api/conversations` | GET | Get conversation history |
 | `/api/webhooks/email` | POST | SendGrid inbound webhook |
 | `/api/webhooks/stripe` | POST | Stripe webhook |
+| `/api/health` | GET | Health check |
 
 ## Tech Stack
 
-- **Backend**: Node.js + Express
+- **Backend**: Node.js + Express (ES Modules)
 - **Database**: SQLite (better-sqlite3)
 - **Email**: SendGrid
 - **Payments**: Stripe
 - **Auth**: JWT + bcrypt
-- **AI**: Claude API (Anthropic)
+- **AI**: Claude Agent SDK (`@anthropic-ai/claude-code`)
+
+## Project Structure
+
+```
+src/
+├── server.js      # Main Express server
+├── db.js          # SQLite database with threading support
+├── auth.js        # JWT authentication
+├── stripe.js      # Stripe payments
+├── email.js       # SendGrid integration with thread parsing
+└── claude.js      # Claude Agent SDK integration
+public/
+└── index.html     # Web dashboard (SPA)
+```
 
 ## License
 
