@@ -202,6 +202,9 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
     // Use user's API key or fall back to system key
     const apiKey = user.anthropic_api_key || process.env.ANTHROPIC_API_KEY;
 
+    // Clean subject (remove thread ID if present for display)
+    const cleanSubject = subject?.replace(/\s*\[[a-f0-9-]+\]\s*/gi, '').replace(/^Re:\s*/i, '').trim() || 'No Subject';
+
     // Check for existing thread (conversation continuity)
     let threadId = emailModule.extractThreadId(subject);
     let response;
@@ -214,30 +217,30 @@ app.post('/api/webhooks/email', upload.none(), async (req, res) => {
         // Continue existing conversation with history
         const previousMessages = db.getConversationsByThread(threadId);
         const messages = previousMessages.flatMap(c => [
-          { role: 'user', content: c.user_message },
+          { role: 'user', content: c.user_message, subject: c.subject },
           { role: 'assistant', content: c.assistant_response }
         ]);
-        messages.push({ role: 'user', content: messageContent });
+        messages.push({ role: 'user', content: messageContent, subject: cleanSubject });
 
         console.log('Continuing thread:', threadId, 'with', previousMessages.length, 'previous messages');
-        response = await chatWithHistory(messages, apiKey);
+        response = await chatWithHistory(messages, cleanSubject, apiKey);
       } else {
         // Thread ID not found or doesn't belong to user, start new thread
         threadId = uuidv4();
         db.createAgentSession(user.id, threadId);
         console.log('Starting new thread (invalid existing):', threadId);
-        response = await chat(messageContent, apiKey);
+        response = await chat(messageContent, cleanSubject, apiKey);
       }
     } else {
       // New conversation - create new thread
       threadId = uuidv4();
       db.createAgentSession(user.id, threadId);
       console.log('Starting new thread:', threadId);
-      response = await chat(messageContent, apiKey);
+      response = await chat(messageContent, cleanSubject, apiKey);
     }
 
-    // Log the conversation with thread ID
-    db.logConversation(user.id, messageContent, response, threadId);
+    // Log the conversation with thread ID and subject
+    db.logConversation(user.id, cleanSubject, messageContent, response, threadId);
 
     // Format subject with thread ID for reply tracking
     const responseSubject = emailModule.formatSubject(subject, threadId);

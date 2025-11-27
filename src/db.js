@@ -35,6 +35,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    subject TEXT,
     user_message TEXT NOT NULL,
     assistant_response TEXT NOT NULL,
     thread_id TEXT,
@@ -116,13 +117,13 @@ function updateSubscriptionStatus(customerId, status, endDate) {
 }
 
 // Conversation operations
-function logConversation(userId, userMessage, assistantResponse, threadId = null) {
+function logConversation(userId, subject, userMessage, assistantResponse, threadId = null) {
   const id = uuidv4();
   const stmt = db.prepare(`
-    INSERT INTO conversations (id, user_id, user_message, assistant_response, thread_id)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO conversations (id, user_id, subject, user_message, assistant_response, thread_id)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(id, userId, userMessage, assistantResponse, threadId);
+  stmt.run(id, userId, subject, userMessage, assistantResponse, threadId);
   return id;
 }
 
