@@ -1,4 +1,4 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import Anthropic from '@anthropic-ai/sdk';
 
 const SYSTEM_PROMPT = `You are Claude, an AI assistant responding to emails via ClaudeMail.
 
@@ -19,44 +19,41 @@ Format your responses appropriately for email:
 Be helpful, accurate, and friendly. If you're unsure about something, say so.`;
 
 /**
- * Process a message using Claude Agent SDK
+ * Process a message using Claude API
  * @param {string} message - The user's email message
  * @param {string} apiKey - Anthropic API key
- * @returns {Promise<string>} - The agent's response
+ * @returns {Promise<string>} - Claude's response
  */
 async function chat(message, apiKey) {
-  process.env.ANTHROPIC_API_KEY = apiKey;
+  const client = new Anthropic({ apiKey });
 
   try {
-    let response = '';
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8096,
+      system: SYSTEM_PROMPT,
+      messages: [
+        { role: 'user', content: message }
+      ]
+    });
 
-    for await (const event of query({
-      prompt: message,
-      options: {
-        model: 'claude-sonnet-4-5-20250929',
-        systemPrompt: SYSTEM_PROMPT,
-        maxTurns: 10,
-      }
-    })) {
-      if (event.type === 'result') {
-        response = event.result;
-      } else if (event.type === 'text') {
-        response += event.content;
-      }
-    }
+    const text = response.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n');
 
-    return response || 'I apologize, but I was unable to generate a response. Please try again.';
+    return text || 'I apologize, but I was unable to generate a response. Please try again.';
 
   } catch (error) {
-    console.error('Claude Agent SDK error:', error);
+    console.error('Claude API error:', error);
 
-    if (error.message?.includes('401') || error.message?.includes('authentication')) {
+    if (error.status === 401) {
       return 'Error: Invalid API key. Please check your API key settings at your ClaudeMail dashboard.';
     }
-    if (error.message?.includes('429') || error.message?.includes('rate')) {
+    if (error.status === 429) {
       return 'Error: Rate limit exceeded. Please wait a moment and try again.';
     }
-    if (error.message?.includes('400') || error.message?.includes('invalid')) {
+    if (error.status === 400) {
       return 'Error: Your message could not be processed. Please try rephrasing your request.';
     }
 
@@ -68,37 +65,28 @@ async function chat(message, apiKey) {
  * Process a message with conversation history
  * @param {Array} messages - Array of {role, content} messages
  * @param {string} apiKey - Anthropic API key
- * @returns {Promise<string>} - The agent's response
+ * @returns {Promise<string>} - Claude's response
  */
 async function chatWithHistory(messages, apiKey) {
-  process.env.ANTHROPIC_API_KEY = apiKey;
+  const client = new Anthropic({ apiKey });
 
   try {
-    const conversationContext = messages
-      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n');
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8096,
+      system: SYSTEM_PROMPT,
+      messages: messages.map(m => ({ role: m.role, content: m.content }))
+    });
 
-    const prompt = `Previous conversation:\n${conversationContext}\n\nPlease continue the conversation and respond to the user's latest message.`;
+    const text = response.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n');
 
-    let response = '';
-
-    for await (const event of query({
-      prompt,
-      options: {
-        model: 'claude-sonnet-4-5-20250929',
-        systemPrompt: SYSTEM_PROMPT,
-        maxTurns: 10,
-      }
-    })) {
-      if (event.type === 'result') {
-        response = event.result;
-      }
-    }
-
-    return response || 'I apologize, but I was unable to generate a response.';
+    return text || 'I apologize, but I was unable to generate a response.';
 
   } catch (error) {
-    console.error('Claude Agent SDK error:', error);
+    console.error('Claude API error:', error);
     return 'I apologize, but an error occurred. Please try again later.';
   }
 }
