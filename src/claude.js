@@ -1,4 +1,4 @@
-import { query } from '@anthropic-ai/claude-code';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 
 const SYSTEM_PROMPT = `You are Claude, an AI assistant responding to emails via ClaudeMail.
 
@@ -15,11 +15,6 @@ Format your responses appropriately for email:
 - Be concise but thorough
 - Structure long responses with clear sections
 - Include code in plain text blocks when relevant
-
-You have access to tools that allow you to:
-- Search the web for current information
-- Perform calculations
-- Generate and analyze content
 
 Be helpful, accurate, and friendly. If you're unsure about something, say so.`;
 
@@ -43,18 +38,13 @@ async function chat(message, apiKey, options = {}) {
       options: {
         model: 'claude-sonnet-4-5-20250929',
         systemPrompt: SYSTEM_PROMPT,
-        maxTurns: 10, // Allow multi-step reasoning
-        allowedTools: [
-          'WebSearch',    // Allow web search for current info
-          'WebFetch',     // Allow fetching web pages
-        ],
+        maxTurns: 10,
       }
     })) {
       // Collect the result
       if (event.type === 'result') {
         response = event.result;
       } else if (event.type === 'text') {
-        // Stream text as it comes
         response += event.content;
       }
     }
@@ -64,7 +54,6 @@ async function chat(message, apiKey, options = {}) {
   } catch (error) {
     console.error('Claude Agent SDK error:', error);
 
-    // Handle specific error types
     if (error.message?.includes('401') || error.message?.includes('authentication')) {
       return 'Error: Invalid API key. Please check your API key settings at your ClaudeMail dashboard.';
     }
@@ -91,7 +80,6 @@ async function chatWithHistory(messages, apiKey) {
   process.env.ANTHROPIC_API_KEY = apiKey;
 
   try {
-    // Format the conversation as a single prompt with context
     const conversationContext = messages
       .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n\n');
@@ -106,7 +94,6 @@ async function chatWithHistory(messages, apiKey) {
         model: 'claude-sonnet-4-5-20250929',
         systemPrompt: SYSTEM_PROMPT,
         maxTurns: 10,
-        allowedTools: ['WebSearch', 'WebFetch'],
       }
     })) {
       if (event.type === 'result') {
