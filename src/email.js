@@ -1,6 +1,13 @@
 import sgMail from '@sendgrid/mail';
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+let initialized = false;
+
+function initSendGrid() {
+  if (!initialized && process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    initialized = true;
+  }
+}
 
 // Extract email from various formats
 // "John Doe <john@example.com>" -> "john@example.com"
@@ -44,6 +51,8 @@ function formatSubject(originalSubject, threadId) {
 }
 
 async function sendEmail(to, subject, text) {
+  initSendGrid();
+
   const msg = {
     to,
     from: process.env.SENDGRID_FROM_EMAIL,
