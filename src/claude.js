@@ -22,17 +22,14 @@ Be helpful, accurate, and friendly. If you're unsure about something, say so.`;
  * Process a message using Claude Agent SDK
  * @param {string} message - The user's email message
  * @param {string} apiKey - Anthropic API key
- * @param {object} options - Additional options
  * @returns {Promise<string>} - The agent's response
  */
-async function chat(message, apiKey, options = {}) {
-  // Set the API key for this request
+async function chat(message, apiKey) {
   process.env.ANTHROPIC_API_KEY = apiKey;
 
   try {
     let response = '';
 
-    // Use the Agent SDK's query function for agentic processing
     for await (const event of query({
       prompt: message,
       options: {
@@ -41,7 +38,6 @@ async function chat(message, apiKey, options = {}) {
         maxTurns: 10,
       }
     })) {
-      // Collect the result
       if (event.type === 'result') {
         response = event.result;
       } else if (event.type === 'text') {
@@ -57,11 +53,9 @@ async function chat(message, apiKey, options = {}) {
     if (error.message?.includes('401') || error.message?.includes('authentication')) {
       return 'Error: Invalid API key. Please check your API key settings at your ClaudeMail dashboard.';
     }
-
     if (error.message?.includes('429') || error.message?.includes('rate')) {
       return 'Error: Rate limit exceeded. Please wait a moment and try again.';
     }
-
     if (error.message?.includes('400') || error.message?.includes('invalid')) {
       return 'Error: Your message could not be processed. Please try rephrasing your request.';
     }
@@ -71,7 +65,7 @@ async function chat(message, apiKey, options = {}) {
 }
 
 /**
- * Process a message with conversation history for multi-turn conversations
+ * Process a message with conversation history
  * @param {Array} messages - Array of {role, content} messages
  * @param {string} apiKey - Anthropic API key
  * @returns {Promise<string>} - The agent's response
